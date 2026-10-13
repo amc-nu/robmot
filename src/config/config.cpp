@@ -8,9 +8,11 @@
 float parameters::ConstantAccelerationModel::getPosVar() const  {return 2.;}
 float parameters::ConstantAccelerationModel::getVelVar() const  {return 4.;}
 float parameters::ConstantAccelerationModel::getAccVar() const  {return 8.;}
+float parameters::ConstantAccelerationModel::getJerkVar() const {return 1.;} // only feeds unused locals in data_structure.cpp
 
 float parameters::ConstantAccelerationModel::getVelQ() const  {return 0.1;}
 float parameters::ConstantAccelerationModel::getAccQ() const  {return 0.01;}
+float parameters::ConstantAccelerationModel::getJerkQ() const {return 0.001;} // unused by the 6-state filter
 
 float parameters::ConstantAccelerationModel::getMemCov() const  {return 4.;}
 
@@ -119,3 +121,14 @@ std::unique_ptr<parameters::detection> parameters::initializeDatabase(const std:
 
 
 
+
+std::unique_ptr<parameters::Detector> parameters::makeDetector(const std::string& name) {
+    if (name == "Virconv")   return std::make_unique<Virconv>();
+    if (name == "Casc")      return std::make_unique<Casc>();
+    if (name == "Pointrcnn") return std::make_unique<Pointrcnn>();
+    if (name == "Pvcnn")     return std::make_unique<Pvcnn>();
+    if (name == "SecondIou") return std::make_unique<SecondIou>();
+    if (name == "CascWaymo") return std::make_unique<CascWaymo>();
+    if (name == "Ctrl")      return std::make_unique<Ctrl>();
+    return nullptr;
+}

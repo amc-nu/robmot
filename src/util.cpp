@@ -83,6 +83,19 @@ public:
     }
 
 
+    // Confidence gate: below the lowest threshold -> drop; below the normal one -> keep only near a confirmed track.
+    static bool acceptDetection(float confidence, const Eigen::Vector3d& location, MemoryManagement& memoryManagement)
+    {
+        if(confidence < parameters::selectedDetector->getConfThConfirmed()) return false; // lowest threshold
+        if(confidence >= selectedDetector->getConfTh()) return true;
+        for(auto savedObject : memoryManagement.getSavedObjects())
+        {
+            if(savedObject->isConfirmed && sqrt(pow(savedObject->_3dBoxLiDAR->stateEstimation(0) - location(0), 2) + pow(savedObject->_3dBoxLiDAR->stateEstimation(1) - location(1), 2)) < parameters::selectedDetector->getEclTh())
+                return true;
+        }
+        return false;
+    }
+
     static void addPretrainedDetection3D(std::string stream, DataFrame* dataframe, string streamfile, PointCloudCalibration& pointCloudCalibration, MemoryManagement& memoryManagement)
     {
         ifstream file3D;
@@ -157,18 +170,7 @@ public:
 
                 object.rt = stof(data3D[detectionDatabase->rotation[detection::ROTATION]]); // 13
                 object.confidenceScore = stof(data3D[detectionDatabase->confidence[detection::CONF]]); // 6
-                if(object.confidenceScore  <parameters::selectedDetector->getConfThConfirmed()) continue; // lowest threshold
-                bool pass = false;
-                for( auto savedObject : memoryManagement.getSavedObjects())
-                {
-                    if(sqrt(pow(savedObject->_3dBoxLiDAR->stateEstimation(0) - object._3dBoxLiDAR->location(0), 2) + pow(savedObject->_3dBoxLiDAR->stateEstimation(1) - object._3dBoxLiDAR->location(1), 2)) < parameters::selectedDetector->getEclTh() && savedObject->isConfirmed)
-                    {
-                        pass = true;
-                        break;
-                    }
-                }
-
-                if(object.confidenceScore<selectedDetector->getConfTh()&& !pass ) continue;
+                if(!acceptDetection(object.confidenceScore, object._3dBoxLiDAR->location, memoryManagement)) continue;
 
                 objects.push_back(object);
                 found = true;

@@ -12,6 +12,10 @@
 #include "config/config.h"
 #include <filesystem>
 #include <eigen3/Eigen/Core>
+#include "args.hxx"
+#ifdef ROBMOT_ROS2
+#include "ros2_tracker.h"
+#endif
 using namespace std;
 namespace fs = std::filesystem;
 
@@ -39,12 +43,66 @@ std::vector<std::string> extractTimestamps(const std::string& filePath) {
 }
 
 
-int main() {
+int main(int argc, char** argv) {
+    args::ArgumentParser parser("RobMOT online 3D multi-object tracker. File mode needs --dataset-name, --split, --detector, "
+                                "--base-path, --dataset-dir; --ros2 overrides them and needs --input-topic and --output-topic.");
+    args::HelpFlag help(parser, "help", "Show this help", {'h', "help"});
+    args::Flag ros2Arg(parser, "ros2", "ROS 2 mode: DetectedObjects in, TrackedObjects out (ignores the dataset options; input must be in a fixed world frame)", {"ros2"});
+    args::ValueFlag<string> inputTopicArg(parser, "topic", "[--ros2] autoware_perception_msgs/msg/DetectedObjects topic to subscribe to", {"input-topic"});
+    args::ValueFlag<string> outputTopicArg(parser, "topic", "[--ros2] autoware_perception_msgs/msg/TrackedObjects topic to publish", {"output-topic"});
+    args::ValueFlag<string> datasetNameArg(parser, "kitti|waymo", "Dataset name", {"dataset-name"});
+    args::ValueFlag<string> splitArg(parser, "training|testing", "Dataset split", {"split"});
+    args::ValueFlag<string> detectorArg(parser, "name", "Detector: Virconv, Casc, Pointrcnn, Pvcnn, SecondIou (KITTI); CascWaymo, Ctrl (Waymo). Default with --ros2: Ctrl", {"detector"});
+    args::ValueFlag<string> basePathArg(parser, "dir", "Path to RobMOT/src (holds advanced_detection/)", {"base-path"});
+    args::ValueFlag<string> datasetDirArg(parser, "dir", "Dataset root (contains kitti/ and waymo/)", {"dataset-dir"});
+    try {
+        parser.ParseCLI(argc, argv);
+    } catch (const args::Help&) {
+        std::cout << parser;
+        return 0;
+    } catch (const args::Error& e) {
+        std::cerr << e.what() << "\n" << parser;
+        return 1;
+    }
 
+    const bool ros2 = ros2Arg;
+    std::vector<std::pair<const char*, bool>> required;
+    if (ros2) required = {{"--input-topic", (bool)inputTopicArg}, {"--output-topic", (bool)outputTopicArg}};
+    else      required = {{"--dataset-name", (bool)datasetNameArg}, {"--split", (bool)splitArg}, {"--detector", (bool)detectorArg},
+                          {"--base-path", (bool)basePathArg}, {"--dataset-dir", (bool)datasetDirArg}};
+    for (auto& [name, present] : required)
+        if (!present) { std::cerr << name << " is required" << (ros2 ? " with --ros2" : "") << "\n" << parser; return 1; }
+
+    if (ros2) {
+#ifdef ROBMOT_ROS2
+        parameters::selectedDetector = parameters::makeDetector(detectorArg ? args::get(detectorArg) : "Ctrl");
+        if (!parameters::selectedDetector) {
+            std::cerr << "Unknown --detector '" << args::get(detectorArg) << "'\n"; return 1;
+        }
+        return runRos2(args::get(inputTopicArg), args::get(outputTopicArg));
+#else
+        std::cerr << "Built without ROS 2 support (rclcpp/autoware_perception_msgs not found at configure time)\n"; return 1;
+#endif
+    }
+
+    Settings::dataset_name = args::get(datasetNameArg);
+    Settings::dataset      = args::get(splitArg);
+    Settings::basePath     = args::get(basePathArg);
+    if (Settings::dataset_name != "kitti" && Settings::dataset_name != "waymo") {
+        std::cerr << "--dataset-name must be kitti or waymo\n"; return 1;
+    }
+    if (Settings::dataset != "training" && Settings::dataset != "testing") {
+        std::cerr << "--split must be training or testing\n"; return 1;
+    }
+    parameters::selectedDetector = parameters::makeDetector(args::get(detectorArg));
+    if (!parameters::selectedDetector) {
+        std::cerr << "Unknown --detector '" << args::get(detectorArg) << "'\n"; return 1;
+    }
 
     float sum = 0;
     float totalFrames = 0;
-    const string BASE_DIR               = "EXAMPLE/datasets/"; // TODO: Update to the dataset directory on your machine.
+    string BASE_DIR = args::get(datasetDirArg);
+    if (BASE_DIR.back() != '/') BASE_DIR += '/';
     const string BASE_DIR_DATABASE      = BASE_DIR + Settings::dataset_name;
 
     // Camera Images Settings

@@ -1,12 +1,10 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.22)
 project(Tracking_3D)
-set(CMAKE_C_COMPILER /usr/bin/gcc-13)
-set(CMAKE_CXX_COMPILER /usr/bin/g++-13)
 set(CMAKE_CXX_STANDARD 17)
 
 
 find_package(OpenCV 4.1 REQUIRED)
-find_package(PCL 1.14 REQUIRED)
+find_package(PCL 1.12 REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 include_directories(${PCL_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR})
@@ -31,6 +29,17 @@ add_executable(Tracking_3D
         src/tracking_module/KalmanFilter.cpp
         src/config/config.cpp
         src/datatype/Box3D.cpp)
+
+# Optional --ros2 mode: needs a sourced ROS 2 environment with autoware_perception_msgs.
+find_package(rclcpp QUIET)
+find_package(autoware_perception_msgs QUIET)
+if(rclcpp_FOUND AND autoware_perception_msgs_FOUND)
+    target_sources(Tracking_3D PRIVATE src/ros2_tracker.cpp)
+    target_compile_definitions(Tracking_3D PRIVATE ROBMOT_ROS2)
+    target_link_libraries(Tracking_3D rclcpp::rclcpp ${autoware_perception_msgs_TARGETS})
+else()
+    message(STATUS "rclcpp/autoware_perception_msgs not found: building without --ros2")
+endif()
 
 target_link_libraries (Tracking_3D ${OpenCV_LIBS})
 target_link_libraries (Tracking_3D ${PCL_LIBRARIES})

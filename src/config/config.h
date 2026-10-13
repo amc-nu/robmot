@@ -17,14 +17,13 @@ namespace parameters
 {
     struct Settings
     {
-        constexpr static const char* dataset_name = "kitti";
-        constexpr static const char* dataset = "training";
-        constexpr static const bool  isTraining                 = true;
+        // Set from the CLI in main().
+        inline static std::string dataset_name; // kitti|waymo
+        inline static std::string dataset;      // training|testing
+        inline static std::string basePath;     // must end in 'RobMOT/src'
         constexpr static const bool  processDetectedObjectsOnly = true; // The output only for visible objects.
         constexpr static const bool selectedStreamsActivation   = false; // To run specific stream/s
         constexpr static const char* selectedStreams[1]   ={"0002"};
-        //TODO: Include the fill project path. The path should end by 'RobMOT/src'
-        constexpr static const char* basePath  = "/EXAMPLE/RobMOT/src";
     };
     struct MotionModel
     {
@@ -195,11 +194,13 @@ namespace parameters
         kitti();
     };
 
-    // TODO: Define selectedDetector here
-    inline std::unique_ptr<parameters::Detector> selectedDetector = std::make_unique<Casc>();
+    // Set from the CLI in main() via makeDetector().
+    inline std::unique_ptr<parameters::Detector> selectedDetector;
     inline std::unique_ptr<parameters::MotionModel> selectedMotionModel = std::make_unique<ConstantAccelerationModel>();
 
 
+    // Returns nullptr for an unknown name.
+    std::unique_ptr<parameters::Detector> makeDetector(const std::string& name);
     std::unique_ptr<parameters::detection> initializeDatabase(const std::string& database);
 }
 
